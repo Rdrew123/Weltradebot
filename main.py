@@ -1,27 +1,40 @@
 import time
-from strategy.live_data_mt5 import connect_to_broker, get_ohlc
-from strategy.simple_entry import detect_buy_candle_close
-from strategy.mt5_orders import place_order
-import MetaTrader5 as mt5
+import random
+import pandas as pd
+from bot.notifier import send_sell_alert
+import yaml
 
-symbol = "GainX 800"
-TIMEFRAMES = [mt5.TIMEFRAME_M1, mt5.TIMEFRAME_M5, mt5.TIMEFRAME_M15]
-lot_size = 0.1
+# Load settings
+with open("config/settings.yaml") as f:
+    settings = yaml.safe_load(f)
 
-broker_config = {
-    "login": 19445845,
-    "password": "kR7(5Gw(",
-    "server": "Weltrade-Demo"
-}
+PAIR = settings['weltrade']['pair']
+TIMEFRAMES = ["1m", "5m", "15m"]
 
-if connect_to_broker("weltrade_demo", broker_config):
+def fetch_dummy_data():
+    """Simulated OHLC data for testing without MT5"""
+    data = {
+        "open": [random.uniform(100, 110) for _ in range(200)],
+        "close": [random.uniform(100, 110) for _ in range(200)],
+        "high": [random.uniform(110, 115) for _ in range(200)],
+        "low": [random.uniform(95, 100) for _ in range(200)],
+    }
+    return pd.DataFrame(data)
+
+def check_for_sell_signal(df, timeframe):
+    """Check if last candle is bullish (buy) and send SELL alert"""
+    last = df.iloc[-1]
+    if last['close'] > last['open']:
+        entry = last['close']
+        tp = last['low']
+        send_sell_alert(PAIR, entry, tp, timeframe)
+
+def main():
     while True:
         for tf in TIMEFRAMES:
-            df = get_ohlc(symbol, timeframe=tf, num_bars=200)
-            if df is not None:
-                is_buy_candle, tp_price = detect_buy_candle_close(df)
-                if is_buy_candle:
-                    entry_price = df[-1]['close']
-                    sl = df[-1]['high']
-                    place_order(symbol, lot=lot_size, entry=entry_price, sl=sl, tp=tp_price, order_type="SELL")
-        time.sleep(30)
+            df = fetch_dummy_data()
+            check_for_sell_signal(df, tf)
+        time.sleep(60)  # run every minute
+
+if __name__ == "__main__":
+    main()
