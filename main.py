@@ -1,40 +1,67 @@
 import time
-import random
 import pandas as pd
-from bot.notifier import send_sell_alert
+import requests
+from bot.notifier import send_trade_alert
+from strategy.structure import detect_choch_bos
 import yaml
 
-# Load settings
 with open("config/settings.yaml") as f:
     settings = yaml.safe_load(f)
 
-PAIR = settings['weltrade']['pair']
-TIMEFRAMES = ["1m", "5m", "15m"]
+FMP_KEY = settings['api']['fmp_key']
+PAIR = settings['pair']['symbol']
 
-def fetch_dummy_data():
-    """Simulated OHLC data for testing without MT5"""
-    data = {
-        "open": [random.uniform(100, 110) for _ in range(200)],
-        "close": [random.uniform(100, 110) for _ in range(200)],
-        "high": [random.uniform(110, 115) for _ in range(200)],
-        "low": [random.uniform(95, 100) for _ in range(200)],
-    }
-    return pd.DataFrame(data)
+price_history_m1 = []
+price_history_m5 = []
 
-def check_for_sell_signal(df, timeframe):
-    """Check if last candle is bullish (buy) and send SELL alert"""
-    last = df.iloc[-1]
-    if last['close'] > last['open']:
-        entry = last['close']
-        tp = last['low']
-        send_sell_alert(PAIR, entry, tp, timeframe)
+def fetch_usdjpy():
+    url = f"https://financialmodelingprep.com/api/v3/quote/{PAIR}?apikey={FMP_KEY}"
+    response = requests.get(url).json()
+    return response[0]['price']
 
-def main():
+def simulate_candle(price_list):
+    df = pd.DataFrame(price_list, columns=['close'])
+    df['high'] = df['close']
+    df['low'] = df['close']
+    return df
+
+def run_bot():
     while True:
-        for tf in TIMEFRAMES:
-            df = fetch_dummy_data()
-            check_for_sell_signal(df, tf)
-        time.sleep(60)  # run every minute
+        price = fetch_usdjpy()
+        price_history_m1.append(price)
+        if len(price_history_m1) > 5:
+            df_m1 = simulate_candle(price_history_m1[-5:])
+            direction = detect_choch_bos(df_m1)
+            if direction:
+                send_trade_alert(
+                    PAIR,
+                    direction,
+                    "M1",
+                    price,
+                    price-0.1 if direction=="buy" else price+0.1,
+                    price+0.1 if direction=="buy" else price-0.1,
+                    price+0.2 if direction=="buy" else price-0.2,
+                    price+0.3 if direction=="buy" else price-0.3
+                )
+
+        price_history_m5.append(price)
+        if len(price_history_m5) >= 5:
+            df_m5 = simulate_candle(price_history_m5[-5:])
+            direction = detect_choch_bos(df_m5)
+            if direction:
+                send_trade_alert(
+                    PAIR,
+                    direction,
+                    "M5",
+                    price,
+                    price-0.1 if direction=="buy" else price+0.1,
+                    price+0.1 if direction=="buy" else price-0.1,
+                    price+0.2 if direction=="buy" else price-0.2,
+                    price+0.3 if direction=="buy" else price-0.3
+                )
+            price_history_m5.clear()
+
+        time.sleep(60)
 
 if __name__ == "__main__":
-    main()
+    run_bot()
