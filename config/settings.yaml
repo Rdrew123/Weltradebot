@@ -2,9 +2,8 @@ telegram:
   token: "8455333322:AAEda2OU1klkkl4pRc2GF7DtaSE5B1ok7Cw"
   chat_id: "6023965279"
 
-weltrade:
-  pair: "GainX 800"
-  demo:
-    login: 19445845
-    password: "kR7(5Gw("
-    server: "Weltrade-Demo"
+api:
+  fmp_key: "TS1y5oTVrZ29gT9qbRG1GnvAkxLrz29i"
+
+pair:
+  symbol: "USDJPY"
